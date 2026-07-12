@@ -16,11 +16,9 @@ flyrank-ml-internship/
 ├── FL-04/
 ├── ...
 └── README.md
-```
 
 Each folder contains the deliverables, documentation, screenshots, and supporting files for the corresponding internship task.
 
----
 
 ## Internship Objectives
 
@@ -30,7 +28,6 @@ Each folder contains the deliverables, documentation, screenshots, and supportin
 * Build structured workflows for software engineering and ML tasks.
 * Document progress and reflect on continuous learning.
 
----
 
 ## Completed Assignments
 
@@ -41,7 +38,6 @@ Each folder contains the deliverables, documentation, screenshots, and supportin
 | FL-03                  | Pending       |
 | FL-04                  | Pending       |
 
----
 
 ## Technologies & Tools
 
@@ -54,7 +50,6 @@ Each folder contains the deliverables, documentation, screenshots, and supportin
 * Markdown
 * Microsoft Word
 
----
 
 ## About Me
 
@@ -64,7 +59,6 @@ Machine Learning Intern at FlyRank
 
 I am passionate about Software Engineering, Machine Learning, and Artificial Intelligence. This repository serves as a record of my internship work and continuous learning.
 
----
 
 ## License
 
