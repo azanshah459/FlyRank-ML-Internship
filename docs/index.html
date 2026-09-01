@@ -1,0 +1,603 @@
+<!--
+  FlyRank Search Intelligence Capstone -- research paper.
+  All results below are transcribed from the executed notebook
+  work/notebooks/capstone.ipynb (run 2026-09, seed 42) and its receipt
+  work/outputs/capstone_model_results.json.
+  Public rule observed: no client names, domains, URLs, private queries,
+  credentials, raw exports, or claims proving Google's algorithm or causal
+  refresh impact. Only pseudonymised content hash ids appear.
+-->
+<title>Which Pages Under-Capture Clicks</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root{
+    --bg:#f6f7f8;
+    --surface:#ffffff;
+    --surface-2:#eef1f2;
+    --ink:#171b1f;
+    --muted:#5c6670;
+    --line:#e0e4e7;
+    --accent:#1f6f6b;
+    --accent-soft:#e6efee;
+    --good:#2f7d5d;
+    --warn:#9a6b16;
+    --crit:#b23b3b;
+    --c-base:#7b858d;
+    --c-lr:#1f6f6b;
+    --c-rf:#c08a2e;
+    --grid:#d7dcdf;
+    --shadow:0 1px 2px rgba(20,25,30,.05), 0 10px 30px -20px rgba(20,25,30,.3);
+    --serif:"Spectral", Georgia, "Times New Roman", serif;
+    --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1113; --surface:#161a1d; --surface-2:#1d2226;
+      --ink:#e8eaec; --muted:#98a2ac; --line:#272d32;
+      --accent:#54b7af; --accent-soft:#12302e;
+      --good:#5cb98c; --warn:#d0a24e; --crit:#e0736f;
+      --c-base:#8b959d; --c-lr:#54b7af; --c-rf:#d7a24e;
+      --grid:#2b3237;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 36px -20px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1113; --surface:#161a1d; --surface-2:#1d2226;
+    --ink:#e8eaec; --muted:#98a2ac; --line:#272d32;
+    --accent:#54b7af; --accent-soft:#12302e;
+    --good:#5cb98c; --warn:#d0a24e; --crit:#e0736f;
+    --c-base:#8b959d; --c-lr:#54b7af; --c-rf:#d7a24e;
+    --grid:#2b3237;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 36px -20px rgba(0,0,0,.7);
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:17px;line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent-soft);color:var(--ink)}
+  a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  .page{
+    max-width:1140px;margin:0 auto;
+    padding:0 clamp(1.1rem,4vw,3rem);
+    display:grid;grid-template-columns:1fr;
+  }
+  @media (min-width:1000px){
+    .page{grid-template-columns:190px minmax(0,1fr);column-gap:clamp(2rem,5vw,4.5rem)}
+  }
+
+  .rail{display:none}
+  @media (min-width:1000px){
+    .rail{display:block;position:sticky;top:0;align-self:start;padding-top:3.4rem;height:100vh}
+  }
+  .rail__brand{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:1.4rem}
+  .rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.1rem}
+  .rail a{display:flex;gap:.6rem;padding:.32rem 0;font-size:13.5px;color:var(--muted);text-decoration:none}
+  .rail a:hover{color:var(--ink)}
+  .rail a span{font-family:var(--mono);font-size:11px;color:var(--accent);padding-top:.15rem}
+
+  .hero{padding:3.6rem 0 2.4rem;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 1.1rem}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(2.1rem,5.4vw,3.3rem);line-height:1.08;letter-spacing:-.01em;text-wrap:balance;margin:0 0 1rem}
+  .hero .lede{font-size:1.12rem;color:var(--muted);max-width:60ch;margin:0}
+  .hero__meta{margin-top:2rem;display:flex;flex-wrap:wrap;gap:.5rem .7rem;font-family:var(--mono);font-size:11.5px;letter-spacing:.03em}
+  .tag{border:1px solid var(--line);border-radius:999px;padding:.28rem .7rem;color:var(--muted);background:var(--surface)}
+  .tag--accent{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+  main{padding-bottom:5rem}
+  .sec{padding:2.9rem 0;border-bottom:1px solid var(--line)}
+  .sec:last-child{border-bottom:0}
+  .sec__head{display:flex;gap:.9rem;align-items:baseline;margin:0 0 1.1rem}
+  .sec__num{font-family:var(--mono);font-size:12px;color:var(--accent);padding-top:.3rem;flex:none}
+  h2{font-family:var(--serif);font-weight:600;font-size:clamp(1.5rem,3.4vw,2rem);line-height:1.15;letter-spacing:-.005em;text-wrap:balance;margin:0}
+  h3{font-family:var(--sans);font-weight:600;font-size:1rem;letter-spacing:.01em;margin:2rem 0 .6rem}
+  .sec p{max-width:68ch}
+  .sec p + p{margin-top:1rem}
+  .muted{color:var(--muted)}
+  strong{font-weight:600}
+
+  ul.clean{max-width:68ch;padding-left:1.1rem;margin:.7rem 0}
+  ul.clean li{margin:.4rem 0}
+  ul.clean li::marker{color:var(--accent)}
+
+  .abstract{font-family:var(--serif);font-size:1.16rem;line-height:1.66;max-width:64ch}
+  .abstract span.s{display:block;margin:.55rem 0}
+
+  .callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:1.1rem 1.2rem;margin:1.5rem 0;box-shadow:var(--shadow);max-width:68ch}
+  .callout .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:.4rem}
+  .callout--flag{border-left-color:var(--warn)}
+  .callout--flag .k{color:var(--warn)}
+
+  .tablewrap{overflow-x:auto;margin:1.3rem 0;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+  caption{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:.8rem 1rem;border-bottom:1px solid var(--line)}
+  th,td{padding:.6rem .9rem;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:0}
+  td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  tr.hi td{background:var(--accent-soft)}
+  code{font-family:var(--mono);font-size:.86em;background:var(--surface-2);padding:.08em .38em;border-radius:4px}
+
+  figure{margin:1.6rem 0}
+  .chart{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1.4rem 1.2rem 1rem;box-shadow:var(--shadow)}
+  .chart svg{display:block;width:100%;height:auto;overflow:visible}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:.7rem;max-width:64ch}
+  .legend{display:flex;flex-wrap:wrap;gap:.9rem;font-family:var(--mono);font-size:11.5px;margin-bottom:.9rem}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:.4rem;vertical-align:baseline}
+  .bar-label{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+  .bar-val{font-family:var(--mono);font-size:10.5px;fill:var(--ink);font-variant-numeric:tabular-nums}
+  .axis{stroke:var(--grid);stroke-width:1}
+  .tick{font-family:var(--mono);font-size:10px;fill:var(--muted)}
+
+  .cm{display:grid;grid-template-columns:auto repeat(2,1fr);gap:2px;max-width:420px;font-family:var(--mono);font-size:13px}
+  .cm div{padding:.7rem .6rem;background:var(--surface-2);text-align:center}
+  .cm .lbl{background:transparent;color:var(--muted);font-size:11px;display:flex;align-items:center;justify-content:center}
+  .cm .tp{background:var(--accent-soft);color:var(--accent);font-weight:500}
+  .cm .fp{color:var(--warn)}
+
+  .rc{font-family:var(--mono);font-size:11px;letter-spacing:.03em;border-radius:5px;padding:.16em .5em;border:1px solid var(--line);white-space:nowrap;display:inline-block}
+  .rc--hv{color:var(--crit);border-color:var(--crit)}
+  .rc--bp{color:var(--warn);border-color:var(--warn)}
+  .rc--mo{color:var(--muted)}
+  .rc--rev{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+
+  footer{max-width:1140px;margin:0 auto;padding:2.4rem clamp(1.1rem,4vw,3rem) 4rem;color:var(--muted);font-size:13px;font-family:var(--mono)}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="page">
+
+  <aside class="rail">
+    <div class="rail__brand">FlyRank&nbsp;Capstone</div>
+    <nav aria-label="Sections">
+      <ol>
+        <li><a href="#s1"><span>01</span> Abstract</a></li>
+        <li><a href="#s2"><span>02</span> Introduction</a></li>
+        <li><a href="#s3"><span>03</span> Data</a></li>
+        <li><a href="#s4"><span>04</span> Methodology</a></li>
+        <li><a href="#s5"><span>05</span> Results</a></li>
+        <li><a href="#s6"><span>06</span> Limitations</a></li>
+        <li><a href="#s7"><span>07</span> Recommendations</a></li>
+        <li><a href="#s8"><span>08</span> Reproducibility</a></li>
+        <li><a href="#s9"><span>09</span> Acknowledgments</a></li>
+      </ol>
+    </nav>
+  </aside>
+
+  <div>
+    <header class="hero">
+      <p class="eyebrow">FlyRank Search Intelligence Capstone · CTR Opportunity Scoring</p>
+      <h1>Which visible pages under-capture clicks, and which to review first?</h1>
+      <p class="lede">A repeatable, decision-support ranking of content pages that earn search impressions but convert them to clicks below the rate of similarly-positioned peers — and an honest test of whether a model beats a hand-written rule at that job.</p>
+      <div class="hero__meta">
+        <span class="tag tag--accent">Lane · Refresh / CTR Opportunity Scoring</span>
+        <span class="tag">Data · FlyRank ML Internship warehouse</span>
+        <span class="tag">Window · Mar 2026 → Apr 2026</span>
+        <span class="tag">Metric · Precision@K</span>
+        <span class="tag">Seed · 42</span>
+      </div>
+    </header>
+
+    <main>
+
+      <!-- 01 ABSTRACT -->
+      <section class="sec" id="s1">
+        <div class="sec__head"><div class="sec__num">01</div><h2>Abstract</h2></div>
+        <div class="abstract">
+          <span class="s">Search Console surfaces many content pages that rank well enough to be seen yet turn impressions into clicks at a lower rate than their position-tier peers, and a content team with limited review time needs to know which of those pages to open first.</span>
+          <span class="s">Using one month of pseudonymised FlyRank Search Console data aggregated to one row per content page (175,304 pages, 47 clients), a page is labelled a CTR opportunity when its March click-through rate sits below the median for its search-position tier <em>and</em> that rate then rises in April.</span>
+          <span class="s">A transparent volume-and-position rule — the Week-4 baseline — is compared against logistic-regression and random-forest models on one split that places every client entirely in train or entirely in test, with an explicit leakage audit and Precision@K as the primary metric.</span>
+          <span class="s">On the held-out test set the transparent rule scored Precision@50 = 0.40, ahead of logistic regression (0.32) and random forest (0.22); the learned models separated the full ranking better (ROC-AUC ≈ 0.99 vs 0.83) but did not improve the top-of-list precision a reviewer actually uses.</span>
+          <span class="s">The deliverable is a ranked review queue of all 157,790 modelled pages with a reason code and an action per page; it is decision support, not evidence that editing any page will raise its traffic, and the recommendation is to keep the rule as the shipping baseline and use the model probability only as a secondary sort key.</span>
+        </div>
+      </section>
+
+      <!-- 02 INTRODUCTION -->
+      <section class="sec" id="s2">
+        <div class="sec__head"><div class="sec__num">02</div><h2>Introduction &amp; problem statement</h2></div>
+        <p>A content or SEO reviewer works down a list. Every page opened is time not spent on another, so the order of that list matters. The judgement this project supports is narrow and concrete: <strong>a page is already visible in search — it earns impressions — but under-captures clicks relative to pages appearing at similar positions, so it is a candidate for a metadata or content review</strong> (title, meta description, snippet alignment with likely query intent).</p>
+        <p>The project turns that judgement into a repeatable ranked queue built only from observable Search Console signals, and then asks the harder question the Week-5 brief demands: does a learned model actually beat the transparent rule at ordering that queue? It does not act automatically, it does not model or reconstruct Google's ranking system, and it does not claim that a review will recover clicks.</p>
+        <div class="callout">
+          <span class="k">Decision supported</span>
+          Given this month's Search Console performance, which content pages should a reviewer inspect first for a possible click-through problem — and what is the stated reason for each?
+        </div>
+      </section>
+
+      <!-- 03 DATA -->
+      <section class="sec" id="s3">
+        <div class="sec__head"><div class="sec__num">03</div><h2>Data</h2></div>
+        <p>All figures come from the <strong>FlyRank ML Internship warehouse</strong> release on Hugging Face (gated, read-token access), queried in place with DuckDB over <code>hf://</code> and aggregated in the notebook.</p>
+        <ul class="clean">
+          <li><strong>Table:</strong> <code>fact_content_daily_performance</code></li>
+          <li><strong>Native grain:</strong> one row per <code>report_date × client_hash_id × content_hash_id</code></li>
+          <li><strong>Decision window:</strong> March 2026 (<code>month=2026-03</code>) — every model feature is computed from this window only</li>
+          <li><strong>Outcome window:</strong> April 2026 (<code>month=2026-04</code>) — read only to construct the label, never entered into the feature matrix</li>
+          <li><strong>Analysis grain:</strong> one row per content page per window, summed from the daily rows where <code>gsc_data_available</code> is true and the page has impressions, a computable CTR, and a positive average position</li>
+        </ul>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Dataset size — from the executed notebook</caption>
+            <thead><tr><th>Quantity</th><th class="num">Value</th></tr></thead>
+            <tbody>
+              <tr><td>March content pages (after filters)</td><td class="num">175,304</td></tr>
+              <tr><td>Distinct clients</td><td class="num">47</td></tr>
+              <tr><td>Pages with an observed April outcome (modelled rows)</td><td class="num">157,790</td></tr>
+              <tr><td>Observed positive rate (<code>is_opportunity</code>)</td><td class="num">0.68%</td></tr>
+              <tr><td>Train rows / test rows</td><td class="num">136,739 / 21,051</td></tr>
+              <tr><td>Train / test positive rate</td><td class="num">0.72% / 0.41%</td></tr>
+              <tr><td>Train / test clients (no overlap)</td><td class="num">36 / 10</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Excluded, and why (public-safe)</h3>
+        <ul class="clean">
+          <li><strong>Any client name, domain, URL, or raw query string</strong> — public rule; only pseudonymised hash identifiers are used, and no client-identifying value appears on this page.</li>
+          <li><strong><code>trend_direction</code>, <code>trend_pct</code>, <code>is_declining_label</code></strong> — label-derived fields; using them as inputs would leak the outcome into the model.</li>
+          <li><strong>All April / outcome-window fields as features</strong> — not knowable at the review moment.</li>
+          <li><strong>GA4, engagement, and AI-referral columns</strong> — outside this CTR question and substantially sparser.</li>
+          <li><strong>The baseline rule's own output</strong> — kept out of the model's features so the model is not simply re-deriving the rule.</li>
+        </ul>
+      </section>
+
+      <!-- 04 METHODOLOGY -->
+      <section class="sec" id="s4">
+        <div class="sec__head"><div class="sec__num">04</div><h2>Methodology</h2></div>
+
+        <h3>Assumptions</h3>
+        <ul class="clean">
+          <li>Click-through rate must be read <em>relative to search position</em>, because position is the dominant driver of baseline CTR.</li>
+          <li>Impression volume is a reasonable filter for how much a given CTR gap matters in practice.</li>
+          <li>A real month-over-month CTR rise is a usable <em>observed</em> proxy for "there was an opportunity here" — imperfect, and revisited under Limitations.</li>
+        </ul>
+
+        <h3>Signal audit</h3>
+        <p>Two bucket tables were checked before encoding anything (notebook §3), each with counts printed.</p>
+        <div class="tablewrap">
+          <table>
+            <caption>Signal 1 · CTR by average-position tier — CONFIRMED</caption>
+            <thead><tr><th>Tier</th><th class="num">Pages</th><th class="num">Median CTR %</th><th class="num">Mean CTR %</th></tr></thead>
+            <tbody>
+              <tr><td>1–3</td><td class="num">13,136</td><td class="num">0.096</td><td class="num">1.10</td></tr>
+              <tr><td>4–10</td><td class="num">81,619</td><td class="num">0.000</td><td class="num">0.51</td></tr>
+              <tr><td>11–20</td><td class="num">32,548</td><td class="num">0.000</td><td class="num">0.33</td></tr>
+              <tr><td>21–50</td><td class="num">34,783</td><td class="num">0.000</td><td class="num">0.23</td></tr>
+              <tr><td>51+</td><td class="num">13,218</td><td class="num">0.000</td><td class="num">0.10</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">Mean CTR falls monotonically as position worsens. Median CTR is zero below tier 1–3 because most pages record no clicks in a single month — which is exactly why the label and baseline compare a page against its own tier, not one global CTR.</p>
+        <div class="tablewrap">
+          <table>
+            <caption>Signal 2 · CTR by impression quartile — MIXED</caption>
+            <thead><tr><th>Quartile</th><th class="num">Pages</th><th class="num">Median impr.</th><th class="num">Median CTR %</th><th class="num">Mean CTR %</th></tr></thead>
+            <tbody>
+              <tr><td>Q1 — lowest</td><td class="num">44,350</td><td class="num">5</td><td class="num">0.000</td><td class="num">0.93</td></tr>
+              <tr><td>Q2</td><td class="num">43,321</td><td class="num">69</td><td class="num">0.000</td><td class="num">0.28</td></tr>
+              <tr><td>Q3</td><td class="num">43,810</td><td class="num">427</td><td class="num">0.000</td><td class="num">0.24</td></tr>
+              <tr><td>Q4 — highest</td><td class="num">43,823</td><td class="num">3,042</td><td class="num">0.195</td><td class="num">0.30</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">Only the top quartile has a non-zero median CTR, so volume marks where a CTR gap is even measurable — but mean CTR does not rise with volume (it is highest in Q1, from a few tiny-impression pages with one lucky click). Volume is kept as a prioritisation filter, not as evidence that impressions cause clicks.</p>
+
+        <h3>Features — 9, all from the decision window</h3>
+        <div class="tablewrap">
+          <table>
+            <caption>Model features · every value known at the review moment</caption>
+            <thead><tr><th>Feature</th><th>Definition</th></tr></thead>
+            <tbody>
+              <tr><td><code>impressions</code></td><td>March Search impressions (sum)</td></tr>
+              <tr><td><code>clicks</code></td><td>March Search clicks (sum)</td></tr>
+              <tr><td><code>ctr_pct</code></td><td>clicks / impressions × 100 (March)</td></tr>
+              <tr><td><code>avg_position</code></td><td>average Search position, March</td></tr>
+              <tr><td><code>observed_days</code></td><td>count of March days with Search Console data</td></tr>
+              <tr><td><code>log_impressions</code>, <code>log_clicks</code></td><td><code>log1p</code> of the counts</td></tr>
+              <tr><td><code>ctr_decimal</code></td><td><code>ctr_pct / 100</code></td></tr>
+              <tr><td><code>position_inverse</code></td><td><code>1 / avg_position</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Label definition</h3>
+        <p>Position tiers are cut at <code>1–3</code>, <code>4–10</code>, <code>11–20</code>, <code>21–50</code>, <code>51+</code>. For each tier the median March <code>ctr_pct</code> is the benchmark. A page is a positive case when <strong>both</strong> hold: <code>march_low_ctr</code> — its March CTR is below its tier's median; and <code>ctr_improved</code> — its CTR rose from March to April. <code>is_opportunity = march_low_ctr AND ctr_improved</code>, otherwise 0. Observed positive rate 0.68% (1,073 of 157,790).</p>
+
+        <h3>Baseline — Week-4, transparent</h3>
+        <p>Flag a page when <code>impressions ≥ median(March impressions)</code> (= 178) <strong>and</strong> <code>ctr_pct &lt; tier median CTR</code>. Reason code <span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span>, action <span class="rc rc--rev">REVIEW_CTR</span>. Scored on the same test rows as the models.</p>
+
+        <h3>Validation design</h3>
+        <ul class="clean">
+          <li>Single <code>GroupShuffleSplit</code>, 20% test, fixed seed 42.</li>
+          <li><strong>Grouped on <code>client_hash_id</code></strong> — no client appears on both sides (verified: 0 overlap). Pages from one client share templates and content patterns, so a plain row split would leak that structure and flatter the score.</li>
+          <li>Baseline and both models are evaluated on the identical held-out test rows.</li>
+        </ul>
+
+        <h3>Leakage checks (asserted in the notebook — all pass)</h3>
+        <ul class="clean">
+          <li>No label-derived or outcome-window column appears in the feature list (<code>set()</code> intersection).</li>
+          <li>Identifiers are used only for grouping and for naming ranked rows.</li>
+          <li>The feature window is confined to March — a date assertion guards it.</li>
+          <li>The baseline's own prediction is excluded from the feature matrix.</li>
+        </ul>
+
+        <h3>Metric</h3>
+        <p>Primary: <strong>Precision@K</strong> for K = 10, 20, 50 (headline K = 50) — it mirrors the real use, where a reviewer works down a short list. Threshold metrics are reported as secondary context only, because the positive class is ~0.4% of the test set and accuracy is dominated by the negatives.</p>
+      </section>
+
+      <!-- 05 RESULTS -->
+      <section class="sec" id="s5">
+        <div class="sec__head"><div class="sec__num">05</div><h2>Results</h2></div>
+
+        <div class="callout callout--flag">
+          <span class="k">Headline</span>
+          The transparent rule was <strong>not</strong> beaten on the decision metric. Best learned model: logistic regression, Precision@50 = <strong>0.32</strong> vs. baseline <strong>0.40</strong> — an absolute change of <strong>−0.08</strong>.
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Precision@K on the shared held-out test set (21,051 rows · 86 positives)</caption>
+            <thead><tr><th>Method</th><th class="num">P@10</th><th class="num">P@20</th><th class="num">P@50</th></tr></thead>
+            <tbody>
+              <tr class="hi"><td>Week-4 baseline (rule)</td><td class="num">0.60</td><td class="num">0.55</td><td class="num">0.40</td></tr>
+              <tr><td>Logistic regression</td><td class="num">0.60</td><td class="num">0.40</td><td class="num">0.32</td></tr>
+              <tr><td>Random forest</td><td class="num">0.10</td><td class="num">0.15</td><td class="num">0.22</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure>
+          <div class="chart">
+            <div class="legend">
+              <span><i style="background:var(--c-base)"></i>Week-4 baseline</span>
+              <span><i style="background:var(--c-lr)"></i>Logistic regression</span>
+              <span><i style="background:var(--c-rf)"></i>Random forest</span>
+            </div>
+            <svg viewBox="0 0 640 300" role="img" aria-label="Grouped bar chart of Precision at K for the three methods.">
+              <!-- y gridlines at 0,0.2,0.4,0.6 -->
+              <g>
+                <line class="axis" x1="60" y1="250" x2="620" y2="250"/>
+                <line class="axis" x1="60" y1="183.3" x2="620" y2="183.3"/>
+                <line class="axis" x1="60" y1="116.7" x2="620" y2="116.7"/>
+                <line class="axis" x1="60" y1="50" x2="620" y2="50"/>
+                <text class="tick" x="52" y="254" text-anchor="end">0.0</text>
+                <text class="tick" x="52" y="187" text-anchor="end">0.2</text>
+                <text class="tick" x="52" y="120" text-anchor="end">0.4</text>
+                <text class="tick" x="52" y="54" text-anchor="end">0.6</text>
+              </g>
+              <!-- groups: scale y = 250 - value*333.3 -->
+              <!-- K=10 center 160 -->
+              <g>
+                <rect x="110" y="50"    width="30" height="200"   fill="var(--c-base)"/>
+                <rect x="145" y="50"    width="30" height="200"   fill="var(--c-lr)"/>
+                <rect x="180" y="216.7" width="30" height="33.3"  fill="var(--c-rf)"/>
+                <text class="bar-val" x="125" y="44" text-anchor="middle">.60</text>
+                <text class="bar-val" x="160" y="44" text-anchor="middle">.60</text>
+                <text class="bar-val" x="195" y="210" text-anchor="middle">.10</text>
+                <text class="bar-label" x="160" y="270" text-anchor="middle">Precision@10</text>
+              </g>
+              <!-- K=20 center 340 -->
+              <g>
+                <rect x="290" y="66.7"  width="30" height="183.3" fill="var(--c-base)"/>
+                <rect x="325" y="116.7" width="30" height="133.3" fill="var(--c-lr)"/>
+                <rect x="360" y="200"   width="30" height="50"    fill="var(--c-rf)"/>
+                <text class="bar-val" x="305" y="60"  text-anchor="middle">.55</text>
+                <text class="bar-val" x="340" y="110" text-anchor="middle">.40</text>
+                <text class="bar-val" x="375" y="194" text-anchor="middle">.15</text>
+                <text class="bar-label" x="340" y="270" text-anchor="middle">Precision@20</text>
+              </g>
+              <!-- K=50 center 520 -->
+              <g>
+                <rect x="470" y="116.7" width="30" height="133.3" fill="var(--c-base)"/>
+                <rect x="505" y="143.3" width="30" height="106.7" fill="var(--c-lr)"/>
+                <rect x="540" y="176.7" width="30" height="73.3"  fill="var(--c-rf)"/>
+                <text class="bar-val" x="485" y="110" text-anchor="middle">.40</text>
+                <text class="bar-val" x="520" y="137" text-anchor="middle">.32</text>
+                <text class="bar-val" x="555" y="170" text-anchor="middle">.22</text>
+                <text class="bar-label" x="520" y="270" text-anchor="middle">Precision@50</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption>At every K the rule matches or leads. Logistic regression ties it at K=10 but falls behind as the list lengthens; random forest trails throughout.</figcaption>
+        </figure>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Secondary threshold metrics at 0.5 · context only</caption>
+            <thead><tr><th>Method</th><th class="num">Acc.</th><th class="num">Prec.</th><th class="num">Recall</th><th class="num">F1</th><th class="num">ROC-AUC</th><th class="num">Avg&nbsp;Prec.</th></tr></thead>
+            <tbody>
+              <tr><td>Week-4 baseline</td><td class="num">0.993</td><td class="num">0.339</td><td class="num">0.674</td><td class="num">0.451</td><td class="num">0.835</td><td class="num">0.230</td></tr>
+              <tr><td>Logistic regression</td><td class="num">0.973</td><td class="num">0.130</td><td class="num">1.000</td><td class="num">0.231</td><td class="num">0.994</td><td class="num">0.352</td></tr>
+              <tr><td>Random forest</td><td class="num">0.994</td><td class="num">0.333</td><td class="num">0.360</td><td class="num">0.346</td><td class="num">0.990</td><td class="num">0.295</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">The learned models have far higher ROC-AUC and average precision — they rank the <em>whole</em> list better — but that separation does not convert into more true opportunities inside the top 50, and the logistic model at a 0.5 cut has only 13% precision.</p>
+
+        <h3>What the random forest leaned on</h3>
+        <figure>
+          <div class="chart">
+            <svg viewBox="0 0 640 260" role="img" aria-label="Horizontal bar chart of random forest feature importances.">
+              <!-- scale: width = value/0.45 * 470 ; x0 = 150 -->
+              <g font-family="var(--mono)">
+                <text class="bar-label" x="145" y="30"  text-anchor="end">position_inverse</text>
+                <rect x="150" y="20"  width="447" height="16" fill="var(--c-lr)"/>
+                <text class="bar-val" x="603" y="33">0.428</text>
+
+                <text class="bar-label" x="145" y="58"  text-anchor="end">avg_position</text>
+                <rect x="150" y="48"  width="410" height="16" fill="var(--c-lr)"/>
+                <text class="bar-val" x="566" y="61">0.393</text>
+
+                <text class="bar-label" x="145" y="86"  text-anchor="end">ctr_decimal</text>
+                <rect x="150" y="76"  width="70" height="16" fill="var(--c-lr)"/>
+                <text class="bar-val" x="226" y="89">0.067</text>
+
+                <text class="bar-label" x="145" y="114" text-anchor="end">ctr_pct</text>
+                <rect x="150" y="104" width="63" height="16" fill="var(--c-lr)"/>
+                <text class="bar-val" x="219" y="117">0.060</text>
+
+                <text class="bar-label" x="145" y="142" text-anchor="end">log_impressions</text>
+                <rect x="150" y="132" width="18" height="16" fill="var(--c-base)"/>
+                <text class="bar-val" x="174" y="145">0.017</text>
+
+                <text class="bar-label" x="145" y="170" text-anchor="end">impressions</text>
+                <rect x="150" y="160" width="17" height="16" fill="var(--c-base)"/>
+                <text class="bar-val" x="173" y="173">0.016</text>
+
+                <text class="bar-label" x="145" y="198" text-anchor="end">observed_days</text>
+                <rect x="150" y="188" width="14" height="16" fill="var(--c-base)"/>
+                <text class="bar-val" x="170" y="201">0.013</text>
+
+                <text class="bar-label" x="145" y="226" text-anchor="end">clicks</text>
+                <rect x="150" y="216" width="4" height="16" fill="var(--c-base)"/>
+                <text class="bar-val" x="160" y="229">0.003</text>
+
+                <text class="bar-label" x="145" y="254" text-anchor="end">log_clicks</text>
+                <rect x="150" y="244" width="4" height="16" fill="var(--c-base)"/>
+                <text class="bar-val" x="160" y="257">0.003</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption>Position (<code>position_inverse</code> + <code>avg_position</code>) accounts for ~82% of importance; CTR level adds ~13%; impression and click counts barely register. Importance shows what the model leaned on in this split, not causation.</figcaption>
+        </figure>
+
+        <h3>Error analysis — logistic regression at 0.5</h3>
+        <div class="cm" role="img" aria-label="Confusion matrix: true negative 20391, false positive 574, false negative 0, true positive 86.">
+          <div class="lbl"></div><div class="lbl">pred 0</div><div class="lbl">pred 1</div>
+          <div class="lbl">actual 0</div><div>20,391</div><div class="fp">574</div>
+          <div class="lbl">actual 1</div><div>0</div><div class="tp">86</div>
+        </div>
+        <ul class="clean">
+          <li><strong>574 false positives, 0 false negatives.</strong> The model catches every real opportunity in the test set, at ~13% precision — it flags essentially every visible low-CTR page.</li>
+          <li><strong>The false positives cluster hard:</strong> position 1–3 pages with high impressions and zero March clicks whose CTR still did <em>not</em> rise in April. A visible zero-click page reads as an opportunity to the model, but it is not automatically one.</li>
+        </ul>
+      </section>
+
+      <!-- 06 LIMITATIONS -->
+      <section class="sec" id="s6">
+        <div class="sec__head"><div class="sec__num">06</div><h2>Limitations &amp; honest framing</h2></div>
+        <ul class="clean">
+          <li><strong>Observed and directional.</strong> The label is a proxy built from two observed months, not an experiment. A page can show a CTR gap and later rise for reasons unrelated to any review.</li>
+          <li><strong>No causal claim.</strong> Nothing here shows that changing a title, meta description, or body text <em>causes</em> more clicks, and nothing here reconstructs Google's ranking behaviour.</li>
+          <li><strong>The model did not earn its complexity.</strong> On the decision metric the rule wins; the models' higher ROC-AUC did not translate into top-50 precision. Added complexity is not justified here on the evidence.</li>
+          <li><strong>Class imbalance.</strong> 86 positives in the test set — a handful of cases move Precision@K by whole steps. Treat the ordering as guidance, not a calibrated score.</li>
+          <li><strong>Coverage.</strong> Only pages with Search Console data and a positive average position are in scope; newer or very-low-volume pages are excluded and cannot be ranked.</li>
+          <li><strong>One window pair.</strong> A single decision month and a single outcome month; seasonality and algorithm updates are not separated out.</li>
+          <li><strong>Decision support only.</strong> Every output is a prompt for a person to look, with a stated reason — never an automated change.</li>
+        </ul>
+      </section>
+
+      <!-- 07 RECOMMENDATIONS -->
+      <section class="sec" id="s7">
+        <div class="sec__head"><div class="sec__num">07</div><h2>Ranked recommendations — the action playbook</h2></div>
+        <p>The queue scores every one of the 157,790 modelled pages and sorts descending:</p>
+        <div class="callout">
+          <span class="k">Score</span>
+          <code>final_score = 100 · ( 0.70 · model_probability + 0.30 · normalized_ctr_gap )</code><br>
+          <span class="muted">A higher score means review this page sooner — not that a change will pay off. Given the results above, use the model probability only to order pages <em>within</em> a reason-code group; the reason code and the rule come first.</span>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Reason codes &amp; actions</caption>
+            <thead><tr><th>Reason code</th><th>Triggers when</th><th>Action</th><th>What a reviewer does</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td>
+                <td>impressions ≥ median <em>and</em> CTR below the position-tier benchmark</td>
+                <td><span class="rc rc--rev">REVIEW_CTR</span></td>
+                <td>check title, meta description, and snippet against the likely query intent</td>
+              </tr>
+              <tr>
+                <td><span class="rc rc--bp">BELOW_POSITION_BENCHMARK</span></td>
+                <td>CTR below the tier benchmark but not high-volume</td>
+                <td><span class="rc rc--rev">REVIEW_CTR</span> if score ≥ 50, else <span class="rc rc--mo">MONITOR</span></td>
+                <td>quick metadata sanity check; otherwise re-check next window</td>
+              </tr>
+              <tr>
+                <td><span class="rc rc--mo">MONITOR</span></td>
+                <td>no clear gap on the observable signals</td>
+                <td><span class="rc rc--mo">MONITOR</span></td>
+                <td>leave in place, re-score next window</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Queue composition · 157,790 pages</caption>
+            <thead><tr><th>Reason code</th><th class="num">Pages</th></tr></thead>
+            <tbody>
+              <tr><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td class="num">1,850</td></tr>
+              <tr><td><span class="rc rc--bp">BELOW_POSITION_BENCHMARK</span></td><td class="num">2,598</td></tr>
+              <tr><td><span class="rc rc--mo">MONITOR</span></td><td class="num">153,342</td></tr>
+              <tr><td>Action <span class="rc rc--rev">REVIEW_CTR</span> / <span class="rc rc--mo">MONITOR</span></td><td class="num">6,323 / 151,467</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <caption>Top of the review queue · from capstone_ranked_recommendations.csv</caption>
+            <thead>
+              <tr>
+                <th class="num">Rank</th><th>Page (hash)</th><th>Tier</th>
+                <th class="num">Impr.</th><th class="num">CTR %</th><th class="num">CTR gap</th>
+                <th class="num">Model&nbsp;p</th><th class="num">Score</th><th>Reason</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="num">1</td><td><code>content_fa17add…</code></td><td>1–3</td><td class="num">12,588</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9999</td><td class="num">99.99</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">2</td><td><code>content_83167156…</code></td><td>1–3</td><td class="num">6,827</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9999</td><td class="num">99.99</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">3</td><td><code>content_505a6318…</code></td><td>1–3</td><td class="num">3,512</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9998</td><td class="num">99.99</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">4</td><td><code>content_ecc27d32…</code></td><td>1–3</td><td class="num">3,900</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9998</td><td class="num">99.99</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">5</td><td><code>content_d3979871…</code></td><td>1–3</td><td class="num">9,887</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9998</td><td class="num">99.99</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">6</td><td><code>content_bc70bdc1…</code></td><td>1–3</td><td class="num">2,874</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9998</td><td class="num">99.98</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">7</td><td><code>content_db01d946…</code></td><td>1–3</td><td class="num">4,202</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9998</td><td class="num">99.98</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num">8</td><td><code>content_48353a0c…</code></td><td>1–3</td><td class="num">3,795</td><td class="num">0.00</td><td class="num">0.096</td><td class="num">0.9997</td><td class="num">99.98</td><td><span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span></td><td><span class="rc rc--rev">REVIEW_CTR</span></td></tr>
+              <tr><td class="num" colspan="10">… through rank 20 — every top-20 row is a position 1–3, zero-click, high-impression page, <span class="rc rc--hv">HIGH_VOLUME_LOW_CTR</span> / <span class="rc rc--rev">REVIEW_CTR</span>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">How to read a row: the <strong>action</strong> is what to investigate, the <strong>reason code</strong> is why it surfaced, and a high <strong>score</strong> means look sooner — not that the review will recover clicks. The very top of this queue is dominated by tier 1–3 zero-click pages, and the error analysis showed many similar pages did <em>not</em> improve the following month — so open them with that skepticism.</p>
+      </section>
+
+      <!-- 08 REPRODUCIBILITY -->
+      <section class="sec" id="s8">
+        <div class="sec__head"><div class="sec__num">08</div><h2>Reproducibility</h2></div>
+        <ul class="clean">
+          <li><strong>Repository:</strong> <a href="https://github.com/azanshah459/FlyRank-ML-Internship">github.com/azanshah459/FlyRank-ML-Internship</a></li>
+          <li><strong>Notebooks</strong> (<code>work/notebooks/</code>): <code>w02_ml_task_framing.ipynb</code>, <code>w03_data_contract.ipynb</code>, <code>w04_baseline_score.ipynb</code>, <code>w05_model.ipynb</code>, <code>capstone.ipynb</code></li>
+          <li><strong>Receipts</strong> (<code>work/outputs/</code>): <code>capstone_model_results.json</code> is committed; the ranked CSVs (<code>baseline_action_score.csv</code>, <code>capstone_ranked_recommendations.csv</code>) are git-ignored by design and regenerated on every run.</li>
+          <li><strong>Stack:</strong> Python · DuckDB over <code>hf://</code> · scikit-learn · fixed random seed 42</li>
+          <li><strong>Access:</strong> a Hugging Face read token is supplied to the notebook as a secret at run time and is never stored in the repository</li>
+          <li><strong>To reproduce:</strong> open <code>capstone.ipynb</code> in Colab, add the token as <code>HF_TOKEN</code> in Secrets, then Runtime → Run all</li>
+        </ul>
+        <p>The five notebooks form one chain: task framing → data contract → transparent baseline → modeling lane → capstone. The capstone reuses the baseline's rule, the modeling lane's <code>is_opportunity</code> label, and the same client-grouped split, then adds the ranked queue.</p>
+      </section>
+
+      <!-- 09 ACKNOWLEDGMENTS -->
+      <section class="sec" id="s9">
+        <div class="sec__head"><div class="sec__num">09</div><h2>Acknowledgments &amp; data credit</h2></div>
+        <p>Built on the <strong>FlyRank ML Internship dataset</strong> — <a href="https://flyrank.ai">flyrank.ai</a>. The data is pseudonymised; no client name, domain, URL, or query appears in this paper. Crediting the source is standard research practice and it records where this real search data came from.</p>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer>
+  FlyRank Search Intelligence Capstone · CTR Opportunity Scoring · results transcribed from work/notebooks/capstone.ipynb (seed 42).
+</footer>

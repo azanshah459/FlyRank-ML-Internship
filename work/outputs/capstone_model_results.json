@@ -1,0 +1,35 @@
+{
+  "primary_metric": "Precision@50",
+  "best_learned_model": "Logistic Regression",
+  "precision_at_k": [
+    { "Model": "ML-07 Baseline",      "Precision@10": 0.6, "Precision@20": 0.55, "Precision@50": 0.40 },
+    { "Model": "Logistic Regression", "Precision@10": 0.6, "Precision@20": 0.40, "Precision@50": 0.32 },
+    { "Model": "Random Forest",       "Precision@10": 0.1, "Precision@20": 0.15, "Precision@50": 0.22 }
+  ],
+  "secondary_threshold_metrics": [
+    { "Model": "ML-07 Baseline",      "Accuracy": 0.993302, "Precision": 0.339181, "Recall": 0.674419, "F1": 0.451362, "ROC-AUC": 0.834514, "AvgPrecision": 0.230080 },
+    { "Model": "Logistic Regression", "Accuracy": 0.972733, "Precision": 0.130303, "Recall": 1.000000, "F1": 0.230563, "ROC-AUC": 0.994073, "AvgPrecision": 0.351806 },
+    { "Model": "Random Forest",       "Accuracy": 0.994442, "Precision": 0.333333, "Recall": 0.360465, "F1": 0.346369, "ROC-AUC": 0.989692, "AvgPrecision": 0.295242 }
+  ],
+  "train_rows": 136739,
+  "test_rows": 21051,
+  "train_positive_rate": 0.0072,
+  "test_positive_rate": 0.0041,
+  "modeled_rows": 157790,
+  "observed_positive_rate": 0.0068,
+  "confusion_matrix_selected_model": { "tn": 20391, "fp": 574, "fn": 0, "tp": 86 },
+  "rf_feature_importance": {
+    "position_inverse": 0.427880,
+    "avg_position": 0.393170,
+    "ctr_decimal": 0.067151,
+    "ctr_pct": 0.060498,
+    "log_impressions": 0.016649,
+    "impressions": 0.015755,
+    "observed_days": 0.013268,
+    "clicks": 0.003102,
+    "log_clicks": 0.002528
+  },
+  "queue_reason_code_counts": { "MONITOR": 153342, "BELOW_POSITION_BENCHMARK": 2598, "HIGH_VOLUME_LOW_CTR": 1850 },
+  "queue_action_counts": { "MONITOR": 151467, "REVIEW_CTR": 6323 },
+  "note": "Transcribed from the executed work/notebooks/capstone.ipynb (seed 42). Regenerated on any Run all."
+}
